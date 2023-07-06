@@ -1,43 +1,21 @@
+use std::{
+    error::Error,
+    io::{self, Stdout},
+    time::Duration,
+};
+
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{error::Error, io};
-use tui::{
+use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     widgets::{Block, Row, Table, TableState},
     Frame, Terminal,
 };
-
-fn main() -> Result<(), Box<dyn Error>> {
-    // setup terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    // create app and run it
-    let res = run_app(&mut terminal);
-
-    // restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    if let Err(err) = res {
-        println!("{:?}", err)
-    }
-
-    Ok(())
-}
 
 #[derive(Debug, Clone)]
 enum Player {
@@ -64,28 +42,43 @@ impl GameState {
     }
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
+fn main() -> Result<(), Box<dyn Error>> {
+    let mut terminal = setup_terminal()?;
+    run(&mut terminal)?;
+    restore_terminal(&mut terminal)?;
+    Ok(())
+}
+
+fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>, Box<dyn Error>> {
+    let mut stdout = io::stdout();
+    enable_raw_mode()?;
+    execute!(stdout, EnterAlternateScreen)?;
+    Ok(Terminal::new(CrosstermBackend::new(stdout))?)
+}
+
+fn restore_terminal(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+) -> Result<(), Box<dyn Error>> {
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen,)?;
+    Ok(terminal.show_cursor()?)
+}
+
+fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<(), Box<dyn Error>> {
     let mut state = GameState::new();
-    state.selected_cell.select(Some(0));
 
-    loop {
-        terminal.draw(|f| ui(f, &mut state))?;
+    Ok(loop {
+        terminal.draw(|frame| ui(frame, &mut state))?;
 
-        if let Event::Key(key) = event::read()? {
-            let movement = match key.code {
-                KeyCode::Char('q') => return Ok(()),
-                KeyCode::Char('w') => -7,
-                KeyCode::Char('a') => -1,
-                KeyCode::Char('s') => 1,
-                KeyCode::Char('d') => 7,
-                _ => 0,
-            };
-
-            state.selected_cell.select(Some(
-                ((state.selected_cell.selected().unwrap() as i32 + movement) % 49) as usize,
-            ));
+        if event::poll(Duration::from_millis(250))? {
+            if let Event::Key(key) = event::read()? {
+                let movement = match key.code {
+                    KeyCode::Char('q') => break,
+                    _ => {}
+                };
+            }
         }
-    }
+    })
 }
 
 fn ui<B: Backend>(f: &mut Frame<B>, state: &mut GameState) {
