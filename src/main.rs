@@ -66,6 +66,7 @@ fn restore_terminal(
 
 fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<(), Box<dyn Error>> {
     let mut state = GameState::new();
+    state.selected_cell.select(Some(0));
 
     Ok(loop {
         terminal.draw(|frame| ui(frame, &mut state))?;
@@ -74,8 +75,16 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<(), Box<dyn 
             if let Event::Key(key) = event::read()? {
                 let movement = match key.code {
                     KeyCode::Char('q') => break,
-                    _ => {}
+                    KeyCode::Char('w') => -1,
+                    KeyCode::Char('a') => -1,
+                    KeyCode::Char('s') => 1,
+                    KeyCode::Char('d') => 1,
+                    _ => 0,
                 };
+
+                state.selected_cell.select(Some(
+                    ((state.selected_cell.selected().unwrap() as i32 + movement) % 49) as usize,
+                ));
             }
         }
     })
